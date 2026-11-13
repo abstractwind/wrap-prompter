@@ -1,0 +1,6 @@
+{
+  "name": "Mac 环绕提词器",
+  "description": "围绕手机与支架禁区实时动态排版的桌面提词器应用，支持字号行宽独立调节、阅读标记定位、逐句逐段推进与会话防休眠。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
