@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  AppLanguage,
   PersistedConfigV1,
   PlaybackState,
   ReadingMarker,
@@ -17,8 +18,10 @@ import {
   loadPersistedConfig,
   savePersistedConfig,
 } from './utils/defaults';
+import { MESSAGES } from './utils/i18n';
 import {
   DEFAULT_SAMPLE_SCRIPT,
+  DEFAULT_SAMPLE_SCRIPT_EN,
   matchEditedAnchor,
   parseScript,
 } from './utils/scriptParser';
@@ -40,7 +43,6 @@ const WIN_CHROME_HEIGHT = 84; // 44px titlebar + 40px transport bar
 
 function isNormalPrintableKey(e: KeyboardEvent): boolean {
   if (e.key === ' ' || e.key === 'Enter') return true;
-  // Single printable character (letters, digits, punctuation)
   return e.key.length === 1;
 }
 
@@ -56,6 +58,9 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
+
+  const [language, setLanguage] = useState<AppLanguage>(initialLoad.config.language ?? 'zh');
+  const t = MESSAGES[language];
 
   const [rawText, setRawText] = useState<string>(initialLoad.config.rawText);
   const [format, setFormat] = useState<ScriptFormat>(initialLoad.config.format);
@@ -84,7 +89,7 @@ export default function App() {
   const [isDraggingFile, setIsDraggingFile] = useState<boolean>(false);
   const [noticeText, setNoticeText] = useState<string | null>(
     initialLoad.viewportRecovered
-      ? '检测到窗口位置超出当前屏幕，已自动移回可见区域，建议重新校准手机位置'
+      ? MESSAGES[initialLoad.config.language ?? 'zh'].noticeViewportRecovered
       : null
   );
 
@@ -93,7 +98,6 @@ export default function App() {
     [rawText, format, fileName]
   );
 
-  // Active viewport dimensions inside the floating window
   const effWinW = isFullscreen ? Math.max(420, canvasSize.w - 16) : windowRect.width;
   const effWinH = isFullscreen ? Math.max(340, canvasSize.h - 16) : windowRect.height;
   const viewportW = effWinW;
@@ -148,6 +152,11 @@ export default function App() {
     }, durationMs);
   }, []);
 
+  // Sync HTML lang attribute with active UI language
+  useEffect(() => {
+    document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
+  }, [language]);
+
   // Wake Lock integration (FR10)
   const {
     wakeLockStatus,
@@ -156,7 +165,7 @@ export default function App() {
     setSimulateFailure: setSimulateWakeFailure,
     retryWakeLock,
     verifyWakeLock,
-  } = useWakeLock(preventSleepEnabled, sessionState);
+  } = useWakeLock(preventSleepEnabled, sessionState, language);
 
   // Compute current layout synchronously
   const layout = useMemo(
@@ -187,7 +196,6 @@ export default function App() {
     ]
   );
 
-  // Keep anchor refs synced with latest valid layout
   useEffect(() => {
     if (layout.hasAnyReadableSpace && layout.lines.length > 0) {
       anchorCharRef.current = layout.anchorCharIndex;
@@ -199,6 +207,7 @@ export default function App() {
   useEffect(() => {
     const payload: PersistedConfigV1 = {
       version: 1,
+      language,
       rawText,
       format,
       fileName,
@@ -213,6 +222,7 @@ export default function App() {
     };
     savePersistedConfig(payload);
   }, [
+    language,
     rawText,
     format,
     fileName,
@@ -224,6 +234,50 @@ export default function App() {
     readingMarker,
     preventSleepEnabled,
     scrollY,
+  ]);
+
+  // Toggle Chinese <-> English UI (and swap default untouched sample script cleanly)
+  const handleToggleLanguage = useCallback(() => {
+    const nextLang: AppLanguage = language === 'zh' ? 'en' : 'zh';
+    setLanguage(nextLang);
+    setPlaybackState((p) => (p === 'playing' ? 'paused' : p));
+
+    // Only swap script text if the user hasn't modified/replaced the default sample script
+    const isUsingDefaultSample =
+      rawText === DEFAULT_SAMPLE_SCRIPT || rawText === DEFAULT_SAMPLE_SCRIPT_EN;
+    if (isUsingDefaultSample) {
+      const nextText = nextLang === 'en' ? DEFAULT_SAMPLE_SCRIPT_EN : DEFAULT_SAMPLE_SCRIPT;
+      const nextName = MESSAGES[nextLang].defaultFileName;
+      const nextParsed = parseScript(nextText, 'md', nextName);
+      setRawText(nextText);
+      setFormat('md');
+      setFileName(nextName);
+      setActiveUnitIndex(0);
+      anchorCharRef.current = 0;
+      anchorDeltaYRef.current = 0;
+      const resolved = resolveScrollYForAnchor({
+        script: nextParsed,
+        typography,
+        viewportW,
+        viewportH,
+        phoneZone,
+        standZone,
+        markerY: readingMarker.y,
+        targetCharIndex: 0,
+        desiredOffsetFromMarkerY: 0,
+        initialScrollY: 0,
+      });
+      setScrollY(resolved.scrollY);
+    }
+  }, [
+    language,
+    rawText,
+    typography,
+    viewportW,
+    viewportH,
+    phoneZone,
+    standZone,
+    readingMarker.y,
   ]);
 
   // Handle browser viewport resize (FR08 / FR09)
@@ -240,7 +294,7 @@ export default function App() {
           nextH + HEADER_HEIGHT
         );
         if (clamped.recovered) {
-          showNotice('工作区尺寸变化，窗口已移回可见范围并暂停');
+          showNotice(t.noticeWorkspaceResized);
           setPlaybackState('paused');
         }
         return {
@@ -251,7 +305,7 @@ export default function App() {
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, [showNotice]);
+  }, [showNotice, t.noticeWorkspaceResized]);
 
   // Pause & reset clock on window blur / background visibility loss (FR04, FR09, FR10)
   const handleFocusLossPause = useCallback(() => {
@@ -307,7 +361,6 @@ export default function App() {
           const prevDelta = anchorDeltaYRef.current;
           const rawNextScrollY = prevScrollY + typography.speedPtPerSec * dt;
 
-          // Compute layout at candidate scrollY to check end-of-script & continuous anchor stability
           const nextState = computeFullLayoutState({
             script,
             typography,
@@ -326,7 +379,6 @@ export default function App() {
             return rawNextScrollY;
           }
 
-          // Anchor-continuous compensation if an exclusion wrap transition above the marker shifted line Y
           const anchorLine = findCharLine(nextState.lines, prevAnchor);
           if (anchorLine) {
             const expectedY = readingMarker.y + prevDelta - typography.speedPtPerSec * dt;
@@ -409,7 +461,7 @@ export default function App() {
       });
 
       if (!resolved.hasAnyReadableSpace) {
-        showNotice('剩余可读宽度不足两个全角字符，已拒绝本次调整并保留上一组有效值');
+        showNotice(t.noticeInsufficientWidth);
         return false;
       }
 
@@ -436,6 +488,7 @@ export default function App() {
       script,
       scrollY,
       showNotice,
+      t.noticeInsufficientWidth,
     ]
   );
 
@@ -501,7 +554,6 @@ export default function App() {
       layout.unitDisplayEndChar + 1
     );
     const lineHeight = Math.round(typography.fontSize * 1.28) + typography.lineSpacing;
-    // Keep one previous line above reading marker as context
     const resolved = resolveScrollYForAnchor({
       script,
       typography,
@@ -534,8 +586,7 @@ export default function App() {
   const handleTogglePlayPause = useCallback(() => {
     if (readingMode !== 'continuous') return;
     if (playbackState === 'atEnd') {
-      // FR04: Pressing key at end stays at end, does not auto-loop
-      showNotice('已到达文稿末尾，请点击“回到开头”重新开始');
+      showNotice(t.noticeAtEnd);
       return;
     }
     if (sessionState !== 'active') {
@@ -543,7 +594,7 @@ export default function App() {
       setIsCalibrating(false);
     }
     setPlaybackState((prev) => (prev === 'playing' ? 'paused' : 'playing'));
-  }, [readingMode, playbackState, sessionState, showNotice]);
+  }, [readingMode, playbackState, sessionState, showNotice, t.noticeAtEnd]);
 
   const handleResetToStart = useCallback(() => {
     setPlaybackState('paused');
@@ -588,13 +639,13 @@ export default function App() {
     if (sessionState === 'active') {
       setPlaybackState('paused');
       setSessionState('ended');
-      showNotice('已结束本次提词会话，防休眠已释放');
+      showNotice(t.noticeSessionEnded);
     } else {
       setSessionState('active');
       setIsCalibrating(false);
       setPlaybackState('paused');
     }
-  }, [sessionState, showNotice]);
+  }, [sessionState, showNotice, t.noticeSessionEnded]);
 
   // Keyboard Scope & Shortcuts (FR05)
   useEffect(() => {
@@ -660,7 +711,6 @@ export default function App() {
           handleTogglePlayPause();
         }
       } else {
-        // Sentence or Paragraph mode: ONLY Space / Enter advance or continue long unit
         if (e.key === ' ' || e.key === 'Enter') {
           e.preventDefault();
           if (sessionState !== 'active') {
@@ -691,11 +741,11 @@ export default function App() {
     async (file: File) => {
       const lower = file.name.toLowerCase();
       if (!lower.endsWith('.txt') && !lower.endsWith('.md')) {
-        showNotice('导入失败：仅支持 UTF-8 编码的 .txt 与 .md 文稿文件（已保留原稿）');
+        showNotice(t.noticeImportInvalidType);
         return;
       }
       if (file.size > 2 * 1024 * 1024) {
-        showNotice('导入失败：文件超过 2MB 限制（已保留原稿）');
+        showNotice(t.noticeImportTooLarge);
         return;
       }
 
@@ -704,7 +754,7 @@ export default function App() {
         const decoder = new TextDecoder('utf-8', { fatal: true });
         const text = decoder.decode(buffer);
         if (text.trim().length === 0) {
-          showNotice('导入失败：文件内容为空（已保留原稿与阅读位置）');
+          showNotice(t.noticeImportEmpty);
           return;
         }
         const nextFormat: ScriptFormat = lower.endsWith('.md') ? 'md' : 'txt';
@@ -733,11 +783,11 @@ export default function App() {
         setScrollY(resolved.scrollY);
         showNotice(
           sessionState === 'active'
-            ? `已载入“${file.name}”并定位至开头（保持当前会话与暂停状态）`
-            : `已载入“${file.name}”并进入暂停预览`
+            ? t.noticeImportSuccessActive(file.name)
+            : t.noticeImportSuccessIdle(file.name)
         );
       } catch {
-        showNotice('导入失败：文件不是有效的 UTF-8 文本，已保留原稿与位置');
+        showNotice(t.noticeImportBadUtf8);
       }
     },
     [
@@ -749,6 +799,7 @@ export default function App() {
       readingMarker.y,
       sessionState,
       showNotice,
+      t,
     ]
   );
 
@@ -776,14 +827,13 @@ export default function App() {
 
       const nextVpH = Math.max(180, nextWin.height - WIN_CHROME_HEIGHT);
 
-      // Ensure phone zone remains inside the resized window without shrinking/moving phone on screen
       if (
         nextPhone.x < 12 ||
         nextPhone.x + nextPhone.width > nextWin.width - 12 ||
         nextPhone.y < 12 ||
         nextPhone.y + nextPhone.height > nextVpH - 12
       ) {
-        showNotice('已触及手机禁区最小边距限制');
+        showNotice(t.noticePhoneMinMargin);
         return;
       }
 
@@ -794,7 +844,15 @@ export default function App() {
         readingMarker: nextMarker,
       });
     },
-    [windowRect, phoneZone, standZone, readingMarker, applyReflowableUpdate, showNotice]
+    [
+      windowRect,
+      phoneZone,
+      standZone,
+      readingMarker,
+      applyReflowableUpdate,
+      showNotice,
+      t.noticePhoneMinMargin,
+    ]
   );
 
   const handleWheelScroll = useCallback(
@@ -836,6 +894,7 @@ export default function App() {
       }}
     >
       <TopStudioBar
+        language={language}
         fileName={fileName}
         sessionState={sessionState}
         playbackState={playbackState}
@@ -844,6 +903,10 @@ export default function App() {
         preventSleepEnabled={preventSleepEnabled}
         wakeLockStatus={wakeLockStatus}
         wakeLockError={wakeLockError}
+        onToggleLanguage={() => {
+          handleToggleLanguage();
+          (document.activeElement as HTMLElement | null)?.blur();
+        }}
         onImportFile={(f) => void handleImportFile(f)}
         onOpenEditor={() => {
           setPlaybackState('paused');
@@ -879,7 +942,6 @@ export default function App() {
 
       {/* Simulated Mac Secondary Display Workspace */}
       <main className="relative flex-1 overflow-hidden">
-        {/* Subtle studio grid texture on external display */}
         <div
           aria-hidden="true"
           className="absolute inset-0 opacity-[0.03] pointer-events-none"
@@ -892,6 +954,7 @@ export default function App() {
 
         {/* Floating Teleprompter Window */}
         <FloatingWindowShell
+          language={language}
           windowRect={windowRect}
           canvasW={canvasSize.w}
           canvasH={canvasSize.h}
@@ -953,6 +1016,7 @@ export default function App() {
           }}
         >
           <TeleprompterViewport
+            language={language}
             viewportW={viewportW}
             viewportH={viewportH}
             layout={layout}
@@ -996,12 +1060,12 @@ export default function App() {
         {isDraggingFile && (
           <div className="absolute inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center pointer-events-none">
             <div className="px-6 py-4 rounded-xl border border-amber-400/50 bg-[#141820] text-sm text-amber-300 font-medium">
-              松开以导入 UTF-8 文稿（.txt / .md）
+              {t.dropFilePrompt}
             </div>
           </div>
         )}
 
-        {/* Non-blocking System Notice Toast (outside reading lines) */}
+        {/* Non-blocking System Notice Toast */}
         {noticeText && (
           <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-lg bg-[#1A202C]/95 border border-white/15 shadow-xl text-xs text-zinc-100 pointer-events-none">
             {noticeText}
@@ -1010,6 +1074,7 @@ export default function App() {
       </main>
 
       <ScriptEditorModal
+        language={language}
         isOpen={isEditorOpen}
         initialText={rawText}
         initialFormat={format}
@@ -1058,15 +1123,20 @@ export default function App() {
           setScrollY(resolved.scrollY);
           setIsEditorOpen(false);
 
-          if (match.notice) {
-            showNotice(match.notice);
+          if (match.noticeCode === 'empty') {
+            showNotice(t.noticeEditEmpty);
+          } else if (match.noticeCode === 'fallbackPara') {
+            showNotice(t.noticeEditFallbackPara);
+          } else if (match.noticeCode === 'fallbackStart') {
+            showNotice(t.noticeEditFallbackStart);
           } else {
-            showNotice('文稿已更新，当前阅读句位置已保留（保持暂停）');
+            showNotice(t.noticeEditAppliedMatched);
           }
         }}
       />
 
       <SettingsDrawer
+        language={language}
         isOpen={isSettingsOpen}
         typography={typography}
         effectiveLineWidth={layout.effectiveLineWidth}
@@ -1079,7 +1149,6 @@ export default function App() {
         simulateWakeFailure={simulateWakeFailure}
         onClose={() => setIsSettingsOpen(false)}
         onUpdateTypography={(patch) => {
-          // Speed & color/opacity changes do not need reflow validation
           if (
             patch.fontSize === undefined &&
             patch.lineSpacing === undefined &&
@@ -1113,16 +1182,16 @@ export default function App() {
         onSimulateFocusLossRecovery={() => {
           handleFocusLossPause();
           void verifyWakeLock();
-          showNotice('已模拟系统休眠/失焦恢复：滚动已暂停，时钟已重置，防休眠状态已核对');
+          showNotice(t.noticeSimulatedFocusRecovery);
         }}
         onClearRecentScript={() => {
           const def = createDefaultConfig(canvasSize.w, canvasSize.h + HEADER_HEIGHT);
           const geom = createDefaultGeometry(canvasSize.w, canvasSize.h + HEADER_HEIGHT);
           setPlaybackState('paused');
           setSessionState('idle');
-          setRawText(DEFAULT_SAMPLE_SCRIPT);
+          setRawText(language === 'en' ? DEFAULT_SAMPLE_SCRIPT_EN : DEFAULT_SAMPLE_SCRIPT);
           setFormat('md');
-          setFileName(def.fileName);
+          setFileName(t.defaultFileName);
           setReadingMode('continuous');
           setTypography(def.typography);
           setWindowRect({
@@ -1138,7 +1207,7 @@ export default function App() {
           anchorDeltaYRef.current = 0;
           setScrollY(0);
           setIsSettingsOpen(false);
-          showNotice('已清除最近文稿并恢复默认初始设置');
+          showNotice(t.noticeClearedRecent);
         }}
       />
     </div>

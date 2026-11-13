@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import type {
+  AppLanguage,
   LayoutComputation,
   LayoutSpan,
   ReadingMarker,
@@ -9,9 +10,11 @@ import type {
   TypographySettings,
 } from '../types/teleprompter';
 import { SAFETY_PADDING_PT } from '../utils/defaults';
+import { MESSAGES } from '../utils/i18n';
 import { getPaddedExclusionRects } from '../utils/wrapLayoutEngine';
 
 interface TeleprompterViewportProps {
+  language: AppLanguage;
   viewportW: number;
   viewportH: number;
   layout: LayoutComputation;
@@ -96,6 +99,7 @@ function computeSafeMarkerBeamSegments(
 }
 
 export const TeleprompterViewport: React.FC<TeleprompterViewportProps> = ({
+  language,
   viewportW,
   viewportH,
   layout,
@@ -112,6 +116,7 @@ export const TeleprompterViewport: React.FC<TeleprompterViewportProps> = ({
   onClickChar,
 }) => {
   const dragRef = useRef<DragTarget | null>(null);
+  const t = MESSAGES[language];
 
   const startPointerDrag = (e: React.PointerEvent, target: DragTarget) => {
     e.stopPropagation();
@@ -208,7 +213,6 @@ export const TeleprompterViewport: React.FC<TeleprompterViewportProps> = ({
     return sentenceIdx === layout.activeSentenceIndex;
   };
 
-  // Group contiguous active chars inside a span to draw clean highlight pills without changing typography
   const renderSpanContent = (span: LayoutSpan, lineFontSize: number) => {
     const highlightRuns: Array<{ left: number; width: number }> = [];
     let runStart: number | null = null;
@@ -234,7 +238,6 @@ export const TeleprompterViewport: React.FC<TeleprompterViewportProps> = ({
       highlightRuns.push({ left: runStart, width: runWidth });
     }
 
-    // Group contiguous styled text runs for clean DOM rendering
     const textRuns: Array<{
       text: string;
       bold: boolean;
@@ -347,7 +350,7 @@ export const TeleprompterViewport: React.FC<TeleprompterViewportProps> = ({
           }}
         >
           <span className="absolute top-1.5 right-2 text-[10px] font-mono-tabular text-zinc-500">
-            生效行宽 {Math.round(layout.effectiveLineWidth)}pt
+            {t.effectiveLineWidthLabel(Math.round(layout.effectiveLineWidth))}
           </span>
         </div>
       )}
@@ -356,9 +359,7 @@ export const TeleprompterViewport: React.FC<TeleprompterViewportProps> = ({
       <div className="absolute inset-0">
         {!layout.hasAnyReadableSpace ? (
           <div className="flex items-center justify-center h-full px-6 text-center">
-            <p className="text-sm text-amber-300">
-              当前可用阅读宽度不足两个全角字符，请放大窗口或调小禁区/字号
-            </p>
+            <p className="text-sm text-amber-300">{t.unreadableWarning}</p>
           </div>
         ) : (
           visibleLines.map((line) =>
@@ -388,7 +389,7 @@ export const TeleprompterViewport: React.FC<TeleprompterViewportProps> = ({
         )}
       </div>
 
-      {/* Reading Marker Layer (never draws across phone exclusion zone) */}
+      {/* Reading Marker Layer */}
       {readingMarker.visible && (
         <div className="absolute inset-0 pointer-events-none z-20">
           {markerSegments.map((seg, i) => (
@@ -427,7 +428,7 @@ export const TeleprompterViewport: React.FC<TeleprompterViewportProps> = ({
             onPointerMove={handlePointerMove}
             onPointerUp={endPointerDrag}
             onPointerCancel={endPointerDrag}
-            title={isCalibrating ? '拖动调整阅读标记位置' : '阅读参考标记'}
+            title={isCalibrating ? t.dragMarkerTitle : t.readingMarkerTitle}
             className={`absolute -translate-x-1/2 -translate-y-1/2 flex items-center justify-center ${
               isCalibrating ? 'pointer-events-auto cursor-grab active:cursor-grabbing' : ''
             }`}
@@ -444,7 +445,7 @@ export const TeleprompterViewport: React.FC<TeleprompterViewportProps> = ({
               }`}
             >
               <span className="text-[10px] font-semibold leading-none whitespace-nowrap">
-                {readingMarker.orientation === 'horizontal' ? '▸ 读' : '▾ 读'}
+                {readingMarker.orientation === 'horizontal' ? `▸ ${t.markerBadge}` : `▾ ${t.markerBadge}`}
               </span>
             </div>
           </div>
@@ -464,7 +465,6 @@ export const TeleprompterViewport: React.FC<TeleprompterViewportProps> = ({
             height: `${standZone.height}px`,
           }}
         >
-          {/* 12pt Safety Margin Box */}
           {isCalibrating && (
             <div
               aria-hidden="true"
@@ -475,7 +475,6 @@ export const TeleprompterViewport: React.FC<TeleprompterViewportProps> = ({
             />
           )}
 
-          {/* Stand Body */}
           <div
             onPointerDown={(e) => {
               if (!isCalibrating) return;
@@ -497,12 +496,11 @@ export const TeleprompterViewport: React.FC<TeleprompterViewportProps> = ({
           >
             {isCalibrating && (
               <span className="text-[10px] font-mono-tabular text-sky-300/90 whitespace-nowrap">
-                支杆
+                {t.standLabel}
               </span>
             )}
           </div>
 
-          {/* Stand Resize Handles */}
           {isCalibrating &&
             (['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'] as const).map((h) => (
               <div
@@ -553,7 +551,6 @@ export const TeleprompterViewport: React.FC<TeleprompterViewportProps> = ({
           height: `${phoneZone.height}px`,
         }}
       >
-        {/* 12pt Outer Safety Padding Visualization in Calibration Mode */}
         {isCalibrating && (
           <div
             aria-hidden="true"
@@ -563,12 +560,11 @@ export const TeleprompterViewport: React.FC<TeleprompterViewportProps> = ({
             }}
           >
             <span className="absolute -top-4 left-0 text-[10px] font-mono-tabular text-amber-400/80 whitespace-nowrap">
-              安全留白 {SAFETY_PADDING_PT}pt
+              {t.safetyPaddingLabel(SAFETY_PADDING_PT)}
             </span>
           </div>
         )}
 
-        {/* Phone Body */}
         <div
           onPointerDown={(e) => {
             if (!isCalibrating) return;
@@ -588,12 +584,11 @@ export const TeleprompterViewport: React.FC<TeleprompterViewportProps> = ({
               : 'bg-black/50 border border-white/[0.07]'
           }`}
         >
-          {/* Camera lens reference */}
           <div className="w-6 h-2 rounded-full bg-zinc-700/70 border border-white/10" />
 
           <div className="text-center">
             <p className={`text-xs font-medium ${isCalibrating ? 'text-amber-300' : 'text-zinc-500'}`}>
-              手机禁区
+              {t.phoneZoneLabel}
             </p>
             {isCalibrating ? (
               <p className="mt-1 text-[11px] font-mono-tabular text-zinc-400">
@@ -602,14 +597,13 @@ export const TeleprompterViewport: React.FC<TeleprompterViewportProps> = ({
                 ({phoneZone.x}, {phoneZone.y})
               </p>
             ) : (
-              <p className="mt-0.5 text-[11px] text-zinc-600">视口内固定</p>
+              <p className="mt-0.5 text-[11px] text-zinc-600">{t.fixedInViewport}</p>
             )}
           </div>
 
           <div className="w-8 h-0.5 rounded-full bg-zinc-700/50" />
         </div>
 
-        {/* Phone Resize Handles (Calibration Only) */}
         {isCalibrating &&
           (['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'] as const).map((h) => (
             <div

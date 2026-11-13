@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { SessionState, WakeLockStatus } from '../types/teleprompter';
+import type { AppLanguage, SessionState, WakeLockStatus } from '../types/teleprompter';
+import { MESSAGES } from '../utils/i18n';
 
 interface WakeLockSentinelLike {
   released: boolean;
@@ -9,7 +10,8 @@ interface WakeLockSentinelLike {
 
 export function useWakeLock(
   preventSleepEnabled: boolean,
-  sessionState: SessionState
+  sessionState: SessionState,
+  language: AppLanguage
 ) {
   const [status, setStatus] = useState<WakeLockStatus>('off');
   const [errorReason, setErrorReason] = useState<string | null>(null);
@@ -31,6 +33,7 @@ export function useWakeLock(
   }, []);
 
   const acquireLock = useCallback(async () => {
+    const t = MESSAGES[language];
     if (!preventSleepEnabled) {
       await releaseLock();
       setStatus('off');
@@ -45,7 +48,6 @@ export function useWakeLock(
       return;
     }
 
-    // Already holding an active unreleased sentinel — do not duplicate assertions
     if (sentinelRef.current && !sentinelRef.current.released && !simulateFailure) {
       setStatus('active');
       setErrorReason(null);
@@ -55,7 +57,7 @@ export function useWakeLock(
     if (simulateFailure) {
       await releaseLock();
       setStatus('failed');
-      setErrorReason('模拟系统电源策略限制，请点击重试');
+      setErrorReason(t.wakeErrorSimulated);
       return;
     }
 
@@ -65,7 +67,7 @@ export function useWakeLock(
 
     if (!nav.wakeLock || typeof nav.wakeLock.request !== 'function') {
       setStatus('failed');
-      setErrorReason('当前浏览器环境不支持 Screen Wake Lock API');
+      setErrorReason(t.wakeErrorUnsupported);
       return;
     }
 
@@ -83,16 +85,15 @@ export function useWakeLock(
     } catch (err) {
       sentinelRef.current = null;
       setStatus('failed');
-      const msg = err instanceof Error ? err.message : '浏览器拒绝屏幕常亮请求';
-      setErrorReason(`请求被拒绝（${msg}）`);
+      const msg = err instanceof Error ? err.message : 'Permission denied';
+      setErrorReason(t.wakeErrorDenied(msg));
     }
-  }, [preventSleepEnabled, sessionState, simulateFailure, releaseLock]);
+  }, [preventSleepEnabled, sessionState, simulateFailure, releaseLock, language]);
 
   useEffect(() => {
     void acquireLock();
   }, [acquireLock]);
 
-  // Re-verify wake lock when returning from background / screen wake
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && preventSleepEnabled && sessionState === 'active') {
@@ -103,7 +104,6 @@ export function useWakeLock(
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [acquireLock, preventSleepEnabled, sessionState]);
 
-  // Release on unmount
   useEffect(() => {
     return () => {
       void releaseLock();

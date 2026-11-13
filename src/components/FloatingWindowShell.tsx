@@ -11,13 +11,16 @@ import {
   Move,
 } from 'lucide-react';
 import type {
+  AppLanguage,
   PlaybackState,
   ReadingMode,
   Rect,
   SessionState,
 } from '../types/teleprompter';
+import { MESSAGES } from '../utils/i18n';
 
 interface FloatingWindowShellProps {
+  language: AppLanguage;
   windowRect: Rect;
   canvasW: number;
   canvasH: number;
@@ -64,6 +67,7 @@ function hexToRgba(hex: string, alpha: number): string {
 }
 
 export const FloatingWindowShell: React.FC<FloatingWindowShellProps> = ({
+  language,
   windowRect,
   canvasW,
   canvasH,
@@ -92,6 +96,7 @@ export const FloatingWindowShell: React.FC<FloatingWindowShellProps> = ({
   children,
 }) => {
   const dragRef = useRef<WinDragState | null>(null);
+  const t = MESSAGES[language];
 
   const startDrag = (e: React.PointerEvent, state: WinDragState) => {
     if (isFullscreen) return;
@@ -149,7 +154,8 @@ export const FloatingWindowShell: React.FC<FloatingWindowShellProps> = ({
     dragRef.current = null;
   };
 
-  const unitLabel = readingMode === 'paragraph' ? '段' : '句';
+  const isPara = readingMode === 'paragraph';
+  const unitLabel = t.unitLabel(isPara);
   const clampedUnitNum = totalUnits > 0 ? Math.min(totalUnits, unitIndex + 1) : 0;
 
   return (
@@ -163,7 +169,7 @@ export const FloatingWindowShell: React.FC<FloatingWindowShellProps> = ({
         backgroundColor: hexToRgba(backgroundColor, backgroundOpacity),
       }}
     >
-      {/* Window Drag Title Bar (44px) — Never overlaps reading area or exclusion zones */}
+      {/* Window Drag Title Bar (44px) */}
       <div
         onPointerDown={(e) =>
           startDrag(e, {
@@ -182,7 +188,7 @@ export const FloatingWindowShell: React.FC<FloatingWindowShellProps> = ({
       >
         <div className="flex items-center gap-2 text-xs text-zinc-400">
           <Move className="w-3.5 h-3.5 text-zinc-500" />
-          <span className="font-medium text-zinc-300">提词浮窗</span>
+          <span className="font-medium text-zinc-300">{t.floatingWindowTitle}</span>
           <span className="text-zinc-600">·</span>
           <span className="font-mono-tabular text-zinc-400">
             {isFullscreen ? canvasW - 16 : windowRect.width} ×{' '}
@@ -200,13 +206,13 @@ export const FloatingWindowShell: React.FC<FloatingWindowShellProps> = ({
               onClick={onCenterWindow}
               className="px-2 py-1 text-[11px] font-medium text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.06] rounded transition-colors whitespace-nowrap cursor-pointer"
             >
-              居中窗口
+              {t.centerWindow}
             </button>
           )}
           <button
             type="button"
             onClick={onToggleFullscreen}
-            title={isFullscreen ? '恢复浮窗尺寸' : '铺满当前工作区'}
+            title={isFullscreen ? t.restoreWindowSize : t.fillWorkspace}
             className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.06] rounded transition-colors cursor-pointer"
           >
             {isFullscreen ? (
@@ -221,7 +227,7 @@ export const FloatingWindowShell: React.FC<FloatingWindowShellProps> = ({
       {/* Main Reading & Wrap-Around Viewport */}
       {children}
 
-      {/* Bottom Unobstructed Transport Bar (40px) — Always outside phone exclusion zone */}
+      {/* Bottom Unobstructed Transport Bar (40px) */}
       <div className="h-10 shrink-0 px-3.5 border-t border-white/[0.08] bg-black/45 flex items-center justify-between gap-3 select-none z-30">
         <div className="flex items-center gap-1.5">
           {readingMode === 'continuous' ? (
@@ -237,12 +243,12 @@ export const FloatingWindowShell: React.FC<FloatingWindowShellProps> = ({
               {playbackState === 'playing' ? (
                 <>
                   <Pause className="w-3 h-3" />
-                  暂停
+                  {t.pause}
                 </>
               ) : (
                 <>
                   <Play className="w-3 h-3" />
-                  {playbackState === 'atEnd' ? '已到末尾' : '播放'}
+                  {playbackState === 'atEnd' ? t.atEnd : t.play}
                 </>
               )}
             </button>
@@ -254,7 +260,7 @@ export const FloatingWindowShell: React.FC<FloatingWindowShellProps> = ({
                 className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/35 rounded transition-colors whitespace-nowrap cursor-pointer"
               >
                 <ArrowDownToLine className="w-3 h-3" />
-                {readingMode === 'sentence' ? '继续本句' : '继续本段'}
+                {readingMode === 'sentence' ? t.continueSentence : t.continueParagraph}
               </button>
             )
           )}
@@ -262,20 +268,20 @@ export const FloatingWindowShell: React.FC<FloatingWindowShellProps> = ({
           <button
             type="button"
             onClick={onPrevUnit}
-            title={readingMode === 'paragraph' ? '上一段 (← / ↑)' : '上一句 (← / ↑)'}
+            title={t.prevUnitTitle(isPara)}
             className="inline-flex items-center gap-0.5 px-2 py-1 text-xs text-zinc-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 rounded transition-colors whitespace-nowrap cursor-pointer"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
-            上一{unitLabel}
+            {t.prevUnit(isPara)}
           </button>
 
           <button
             type="button"
             onClick={onNextUnit}
-            title={readingMode === 'paragraph' ? '下一段 (→ / ↓)' : '下一句 (→ / ↓)'}
+            title={t.nextUnitTitle(isPara)}
             className="inline-flex items-center gap-0.5 px-2 py-1 text-xs text-zinc-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 rounded transition-colors whitespace-nowrap cursor-pointer"
           >
-            下一{unitLabel}
+            {t.nextUnit(isPara)}
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
 
@@ -285,7 +291,7 @@ export const FloatingWindowShell: React.FC<FloatingWindowShellProps> = ({
             className="inline-flex items-center gap-1 px-2 py-1 text-xs text-zinc-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 rounded transition-colors whitespace-nowrap cursor-pointer"
           >
             <RotateCcw className="w-3 h-3" />
-            回到开头
+            {t.resetToStart}
           </button>
         </div>
 
@@ -294,24 +300,28 @@ export const FloatingWindowShell: React.FC<FloatingWindowShellProps> = ({
             {unitLabel} {clampedUnitNum}/{totalUnits}
           </span>
           <span className="hidden md:inline text-zinc-600">·</span>
-          <span>字号 {fontSize}pt</span>
+          <span>
+            {t.fontSizeShort} {fontSize}pt
+          </span>
           <span className="text-zinc-600">·</span>
           <span>
-            行宽 {Math.round(effectiveLineWidth)}
+            {t.lineWidthShort} {Math.round(effectiveLineWidth)}
             {effectiveLineWidth < targetLineWidth ? `/${targetLineWidth}` : ''}pt
           </span>
           <span className="text-zinc-600 hidden sm:inline">·</span>
-          <span className="hidden sm:inline">{speedPtPerSec} 点/秒</span>
+          <span className="hidden sm:inline">
+            {speedPtPerSec} {t.speedUnit}
+          </span>
           {sessionState === 'active' && playbackState === 'atEnd' && (
             <>
               <span className="text-zinc-600">·</span>
-              <span className="text-amber-400 font-sans font-medium">已到末尾</span>
+              <span className="text-amber-400 font-sans font-medium">{t.atEnd}</span>
             </>
           )}
         </div>
       </div>
 
-      {/* 8-Way Resize Handles (Centered on Phone Exclusion Zone during drag) */}
+      {/* 8-Way Resize Handles */}
       {!isFullscreen &&
         (['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'] as const).map((h) => (
           <div

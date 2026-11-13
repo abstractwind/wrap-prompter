@@ -1,3 +1,5 @@
+export type AppLanguage = 'zh' | 'en';
+
 export type ScriptFormat = 'txt' | 'md';
 
 export type ReadingMode = 'continuous' | 'sentence' | 'paragraph';
@@ -120,6 +122,7 @@ export interface LayoutComputation {
 
 export interface PersistedConfigV1 {
   version: 1;
+  language?: AppLanguage;
   rawText: string;
   format: ScriptFormat;
   fileName: string;

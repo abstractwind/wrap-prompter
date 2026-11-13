@@ -9,15 +9,19 @@ import {
   Square,
   Shield,
   RotateCw,
+  Languages,
 } from 'lucide-react';
 import type {
+  AppLanguage,
   PlaybackState,
   ReadingMode,
   SessionState,
   WakeLockStatus,
 } from '../types/teleprompter';
+import { MESSAGES } from '../utils/i18n';
 
 interface TopStudioBarProps {
+  language: AppLanguage;
   fileName: string;
   sessionState: SessionState;
   playbackState: PlaybackState;
@@ -26,6 +30,7 @@ interface TopStudioBarProps {
   preventSleepEnabled: boolean;
   wakeLockStatus: WakeLockStatus;
   wakeLockError: string | null;
+  onToggleLanguage: () => void;
   onImportFile: (file: File) => void;
   onOpenEditor: () => void;
   onChangeMode: (mode: ReadingMode) => void;
@@ -37,6 +42,7 @@ interface TopStudioBarProps {
 }
 
 export const TopStudioBar: React.FC<TopStudioBarProps> = ({
+  language,
   fileName,
   sessionState,
   playbackState,
@@ -45,6 +51,7 @@ export const TopStudioBar: React.FC<TopStudioBarProps> = ({
   preventSleepEnabled,
   wakeLockStatus,
   wakeLockError,
+  onToggleLanguage,
   onImportFile,
   onOpenEditor,
   onChangeMode,
@@ -55,25 +62,26 @@ export const TopStudioBar: React.FC<TopStudioBarProps> = ({
   onOpenSettings,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const t = MESSAGES[language];
 
   const sessionLabel =
     sessionState === 'idle'
-      ? '尚未开始'
+      ? t.sessionIdle
       : sessionState === 'ended'
-      ? '已结束'
+      ? t.sessionEnded
       : playbackState === 'playing'
-      ? '提词中 · 播放中'
+      ? t.sessionPlaying
       : playbackState === 'atEnd'
-      ? '提词中 · 已到末尾'
-      : '提词中 · 已暂停';
+      ? t.sessionAtEnd
+      : t.sessionPaused;
 
   const wakeStatusLabel = !preventSleepEnabled
-    ? '关闭'
+    ? t.wakeOff
     : wakeLockStatus === 'active'
-    ? '已生效'
+    ? t.wakeActive
     : wakeLockStatus === 'failed'
-    ? '未生效'
-    : '开始提词后生效';
+    ? t.wakeFailed
+    : t.wakePending;
 
   const wakeStatusColor = !preventSleepEnabled
     ? 'text-zinc-400'
@@ -88,12 +96,12 @@ export const TopStudioBar: React.FC<TopStudioBarProps> = ({
       {/* Zone 1: Brand + Clean Unboxed Metadata */}
       <div className="flex items-center gap-3 min-w-0">
         <span className="text-sm font-semibold tracking-tight text-zinc-100 whitespace-nowrap shrink-0">
-          环绕提词器
+          {t.appName}
         </span>
         <span className="text-zinc-600 shrink-0" aria-hidden="true">
           ·
         </span>
-        <span className="text-xs text-zinc-400 truncate max-w-[160px]" title={fileName}>
+        <span className="text-xs text-zinc-400 truncate max-w-[150px]" title={fileName}>
           {fileName}
         </span>
         <span className="text-zinc-600 shrink-0 hidden sm:inline" aria-hidden="true">
@@ -130,20 +138,20 @@ export const TopStudioBar: React.FC<TopStudioBarProps> = ({
           type="button"
           onClick={() => fileInputRef.current?.click()}
           className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-zinc-200 hover:text-white bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-          title="导入 UTF-8 TXT 或 Markdown 文件"
+          title={t.importTitle}
         >
           <FileUp className="w-3.5 h-3.5 text-zinc-400" />
-          导入文稿
+          {t.importScript}
         </button>
 
         <button
           type="button"
           onClick={onOpenEditor}
           className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-zinc-200 hover:text-white bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-          title="粘贴或编辑文稿内容（打开时自动暂停）"
+          title={t.editTitle}
         >
           <FileEdit className="w-3.5 h-3.5 text-zinc-400" />
-          编辑文稿
+          {t.editScript}
         </button>
 
         <div className="h-4 w-px bg-white/10 mx-0.5 shrink-0" />
@@ -152,13 +160,13 @@ export const TopStudioBar: React.FC<TopStudioBarProps> = ({
         <div
           className="inline-flex items-center p-0.5 bg-black/40 border border-white/10 rounded-md shrink-0"
           role="group"
-          aria-label="阅读模式"
+          aria-label={t.readingModeAria}
         >
           {(
             [
-              ['continuous', '连续'],
-              ['sentence', '逐句'],
-              ['paragraph', '逐段'],
+              ['continuous', t.modeContinuous],
+              ['sentence', t.modeSentence],
+              ['paragraph', t.modeParagraph],
             ] as const
           ).map(([modeKey, label]) => (
             <button
@@ -184,17 +192,17 @@ export const TopStudioBar: React.FC<TopStudioBarProps> = ({
               ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
               : 'bg-white/[0.04] hover:bg-white/[0.09] border-white/10 text-zinc-200'
           }`}
-          title={isCalibrating ? '锁定手机、支杆与阅读标记位置' : '校准手机、支杆与阅读标记位置'}
+          title={isCalibrating ? t.lockLayoutTitle : t.adjustLayoutTitle}
         >
           {isCalibrating ? (
             <>
               <Lock className="w-3.5 h-3.5" />
-              锁定布局
+              {t.lockLayout}
             </>
           ) : (
             <>
               <Unlock className="w-3.5 h-3.5 text-zinc-400" />
-              调整布局
+              {t.adjustLayout}
             </>
           )}
         </button>
@@ -205,19 +213,29 @@ export const TopStudioBar: React.FC<TopStudioBarProps> = ({
           className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-zinc-200 hover:text-white bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
         >
           <SlidersHorizontal className="w-3.5 h-3.5 text-zinc-400" />
-          排版设置
+          {t.layoutSettings}
         </button>
       </div>
 
-      {/* Zone 3: Wake Lock & Primary Session CTA */}
-      <div className="flex items-center gap-3 shrink-0">
-        <div className="hidden lg:flex items-center gap-2 text-xs">
+      {/* Zone 3: Language Switch, Wake Lock & Primary Session CTA */}
+      <div className="flex items-center gap-2.5 shrink-0">
+        <button
+          type="button"
+          onClick={onToggleLanguage}
+          title={t.switchLangTitle}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-zinc-200 hover:text-white bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+        >
+          <Languages className="w-3.5 h-3.5 text-amber-400" />
+          <span>{language === 'zh' ? '中 / EN' : 'EN / 中'}</span>
+        </button>
+
+        <div className="hidden xl:flex items-center gap-2 text-xs">
           <button
             type="button"
             onClick={onTogglePreventSleep}
             role="switch"
             aria-checked={preventSleepEnabled}
-            title="防休眠：提词期间保持屏幕常亮"
+            title={t.preventSleepTitle}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
               preventSleepEnabled
                 ? 'bg-white/[0.07] border-white/20 text-zinc-100'
@@ -225,7 +243,7 @@ export const TopStudioBar: React.FC<TopStudioBarProps> = ({
             }`}
           >
             <Shield className={`w-3.5 h-3.5 ${wakeStatusColor}`} />
-            <span>防休眠</span>
+            <span>{t.preventSleep}</span>
             <span className="text-zinc-600">·</span>
             <span className={wakeStatusColor}>{wakeStatusLabel}</span>
           </button>
@@ -234,11 +252,11 @@ export const TopStudioBar: React.FC<TopStudioBarProps> = ({
             <button
               type="button"
               onClick={onRetryWakeLock}
-              title={wakeLockError ?? '重试防休眠'}
+              title={wakeLockError ?? t.retryWakeTitle}
               className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-red-300 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 rounded-md whitespace-nowrap shrink-0 cursor-pointer"
             >
               <RotateCw className="w-3 h-3" />
-              重试
+              {t.retry}
             </button>
           )}
         </div>
@@ -255,12 +273,12 @@ export const TopStudioBar: React.FC<TopStudioBarProps> = ({
           {sessionState === 'active' ? (
             <>
               <Square className="w-3.5 h-3.5 fill-current" />
-              结束提词
+              {t.endSession}
             </>
           ) : (
             <>
               <Play className="w-3.5 h-3.5 fill-current" />
-              开始提词
+              {t.startSession}
             </>
           )}
         </button>

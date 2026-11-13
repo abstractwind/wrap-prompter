@@ -58,6 +58,7 @@ export function createDefaultConfig(viewportW: number, viewportH: number): Persi
   const geom = createDefaultGeometry(viewportW, viewportH);
   return {
     version: 1,
+    language: 'zh',
     rawText: DEFAULT_SAMPLE_SCRIPT,
     format: 'md',
     fileName: '环绕提词示例稿.md',
@@ -201,8 +202,11 @@ export function loadPersistedConfig(viewportW: number, viewportH: number): {
 
     const format = parsed.format === 'txt' || parsed.format === 'md' ? parsed.format : defaults.format;
 
+    const language = parsed.language === 'en' || parsed.language === 'zh' ? parsed.language : 'zh';
+
     const config: PersistedConfigV1 = {
       version: 1,
+      language,
       rawText: typeof parsed.rawText === 'string' ? parsed.rawText : defaults.rawText,
       format,
       fileName: typeof parsed.fileName === 'string' ? parsed.fileName : defaults.fileName,

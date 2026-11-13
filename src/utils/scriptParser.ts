@@ -29,6 +29,29 @@ export const DEFAULT_SAMPLE_SCRIPT = `# 开场白与现场校准说明
 
 10. 最后一段刻意不加句末标点，用于确认无结尾标点的末句依然可以被正常选中、定位并读至文稿末尾`;
 
+export const DEFAULT_SAMPLE_SCRIPT_EN = `# Studio Calibration & Wrap-Around Demo
+
+01. Welcome to Wrap Teleprompter, built for recording on a secondary display with a phone mounted right in front of the screen!
+02. Click "Calibrate" in the top bar and align the center Phone Zone rectangle with your physical smartphone and camera lens.
+03. Notice how a single continuous script flows full-width above the phone, splits cleanly around both sides, and reunites below without skipping a word.
+
+---
+
+## Why True Exclusion Layout Matters
+
+04. Conventional teleprompters either hide text behind a static box or force your eyes far away from the lens.
+05. "The real breakthrough is keeping every line tucked right beside the camera lens without breaking sentence flow!" noted one daily creator.
+06. Out of the box, Font Size defaults to 32pt, Line Width to 760pt, and Scroll Speed to 20pt/s (values like 3.14x are way too fast, while 18–24pt/s feels natural).
+
+07. Press Space or any printable key to start or pause continuous scrolling; switch to Sentence or Paragraph mode anytime and step smoothly with the arrow keys.
+08. This longer demonstration sentence verifies "Continue Sentence" when a single unit spans more than two viewports: instead of skipping past unread lines, pressing Space or Enter pushes the remaining unshown text right up to your reading marker while preserving the previous line for visual context until the final character is cleanly visible.
+
+## Mixed Formatting & Edge Cases
+
+09. Markdown headings, **bold emphasis**, *italics*, decimals like 3.14159, ellipses..., and studio emoji 🎬 🎙️ 📱 render cleanly while keeping sentence boundaries accurate.
+
+10. This final paragraph intentionally omits trailing punctuation to verify that unpunctuated closing lines remain selectable right to the end`;
+
 const PRIMARY_END_PUNCT = new Set(['。', '？', '！', '?', '!']);
 const TRAILING_CLOSERS = new Set([
   '。',
@@ -284,19 +307,21 @@ export function parseScript(
   };
 }
 
+export type EditAnchorNoticeCode = 'empty' | 'fallbackPara' | 'fallbackStart' | null;
+
 export function matchEditedAnchor(
   oldScript: ParsedScript,
   oldAnchorCharIndex: number,
   newScript: ParsedScript
-): { anchorCharIndex: number; notice: string | null } {
+): { anchorCharIndex: number; noticeCode: EditAnchorNoticeCode } {
   if (newScript.chars.length === 0) {
-    return { anchorCharIndex: 0, notice: '文稿内容为空，已定位到开头' };
+    return { anchorCharIndex: 0, noticeCode: 'empty' };
   }
 
   const clampedOld = Math.max(0, Math.min(oldAnchorCharIndex, Math.max(0, oldScript.chars.length - 1)));
   const oldChar = oldScript.chars[clampedOld];
   if (!oldChar) {
-    return { anchorCharIndex: 0, notice: null };
+    return { anchorCharIndex: 0, noticeCode: null };
   }
 
   const oldSentence = oldScript.sentences[oldChar.sentenceIndex];
@@ -326,7 +351,7 @@ export function matchEditedAnchor(
       );
       return {
         anchorCharIndex: best.startChar + offsetInSent,
-        notice: null,
+        noticeCode: null,
       };
     }
   }
@@ -348,7 +373,7 @@ export function matchEditedAnchor(
           if (matchPara) {
             return {
               anchorCharIndex: matchPara.startChar,
-              notice: '当前句已变更或删除，已定位至最近保留段落开头（保持暂停）',
+              noticeCode: 'fallbackPara',
             };
           }
         }
@@ -358,6 +383,6 @@ export function matchEditedAnchor(
 
   return {
     anchorCharIndex: 0,
-    notice: '文稿结构变化较大，已定位至文稿开头（保持暂停）',
+    noticeCode: 'fallbackStart',
   };
 }
