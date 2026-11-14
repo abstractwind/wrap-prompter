@@ -37,6 +37,7 @@ import { FloatingWindowShell } from './components/FloatingWindowShell';
 import { TeleprompterViewport } from './components/TeleprompterViewport';
 import { ScriptEditorModal } from './components/ScriptEditorModal';
 import { SettingsDrawer } from './components/SettingsDrawer';
+import { TimerHudPanels, type ElapsedTimerStatus } from './components/TimerHudPanels';
 
 const HEADER_HEIGHT = 52;
 const WIN_CHROME_HEIGHT = 84; // 44px titlebar + 40px transport bar
@@ -140,6 +141,53 @@ export default function App() {
   const anchorDeltaYRef = useRef<number>(0);
   const noticeTimerRef = useRef<number | null>(null);
   const lastFrameTsRef = useRef<number | null>(null);
+
+  // Elapsed recording timer state (never stops on Space/playback pause)
+  const [timerStatus, setTimerStatus] = useState<ElapsedTimerStatus>('idle');
+  const [elapsedMs, setElapsedMs] = useState<number>(0);
+  const timerAccumulatedMsRef = useRef<number>(0);
+  const timerStartedAtRef = useRef<number | null>(null);
+
+  const startTimerIfIdle = useCallback(() => {
+    if (timerStartedAtRef.current !== null) return;
+    setTimerStatus((prev) => {
+      if (prev === 'running') return prev;
+      if (prev === 'stopped') {
+        timerAccumulatedMsRef.current = 0;
+        setElapsedMs(0);
+      }
+      timerStartedAtRef.current = performance.now();
+      return 'running';
+    });
+  }, []);
+
+  const stopTimerAndHold = useCallback(() => {
+    if (timerStartedAtRef.current !== null) {
+      timerAccumulatedMsRef.current += performance.now() - timerStartedAtRef.current;
+      timerStartedAtRef.current = null;
+      setElapsedMs(timerAccumulatedMsRef.current);
+    }
+    setTimerStatus((prev) => (prev === 'running' ? 'stopped' : prev));
+  }, []);
+
+  const resetElapsedTimer = useCallback(() => {
+    timerAccumulatedMsRef.current = 0;
+    timerStartedAtRef.current = null;
+    setElapsedMs(0);
+    setTimerStatus('idle');
+  }, []);
+
+  useEffect(() => {
+    if (timerStatus !== 'running') return;
+    const intervalId = window.setInterval(() => {
+      if (timerStartedAtRef.current !== null) {
+        setElapsedMs(
+          timerAccumulatedMsRef.current + (performance.now() - timerStartedAtRef.current)
+        );
+      }
+    }, 200);
+    return () => window.clearInterval(intervalId);
+  }, [timerStatus]);
 
   const showNotice = useCallback((msg: string, durationMs = 3600) => {
     setNoticeText(msg);
@@ -544,6 +592,7 @@ export default function App() {
   // Continue long sentence / paragraph when taller than viewport (FR07)
   const handleContinueLongUnit = useCallback(() => {
     if (readingMode === 'continuous') return;
+    startTimerIfIdle();
     if (layout.unitFullyVisible) {
       jumpToUnit(readingMode, activeUnitIndex + 1);
       return;
@@ -569,6 +618,7 @@ export default function App() {
     setScrollY(resolved.scrollY);
   }, [
     readingMode,
+    startTimerIfIdle,
     layout.unitFullyVisible,
     layout.unitDisplayEndChar,
     jumpToUnit,
@@ -593,11 +643,15 @@ export default function App() {
       setSessionState('active');
       setIsCalibrating(false);
     }
+    if (playbackState !== 'playing') {
+      startTimerIfIdle();
+    }
     setPlaybackState((prev) => (prev === 'playing' ? 'paused' : 'playing'));
-  }, [readingMode, playbackState, sessionState, showNotice, t.noticeAtEnd]);
+  }, [readingMode, playbackState, sessionState, startTimerIfIdle, showNotice, t.noticeAtEnd]);
 
   const handleResetToStart = useCallback(() => {
     setPlaybackState('paused');
+    resetElapsedTimer();
     setActiveUnitIndex(0);
     anchorCharRef.current = 0;
     anchorDeltaYRef.current = 0;
@@ -614,7 +668,16 @@ export default function App() {
       initialScrollY: 0,
     });
     setScrollY(resolved.scrollY);
-  }, [script, typography, viewportW, viewportH, phoneZone, standZone, readingMarker.y]);
+  }, [
+    resetElapsedTimer,
+    script,
+    typography,
+    viewportW,
+    viewportH,
+    phoneZone,
+    standZone,
+    readingMarker.y,
+  ]);
 
   const handleChangeMode = useCallback(
     (nextMode: ReadingMode) => {
@@ -639,13 +702,17 @@ export default function App() {
     if (sessionState === 'active') {
       setPlaybackState('paused');
       setSessionState('ended');
+      stopTimerAndHold();
       showNotice(t.noticeSessionEnded);
     } else {
+      if (sessionState === 'ended') {
+        resetElapsedTimer();
+      }
       setSessionState('active');
       setIsCalibrating(false);
       setPlaybackState('paused');
     }
-  }, [sessionState, showNotice, t.noticeSessionEnded]);
+  }, [sessionState, stopTimerAndHold, resetElapsedTimer, showNotice, t.noticeSessionEnded]);
 
   // Keyboard Scope & Shortcuts (FR05)
   useEffect(() => {
@@ -683,6 +750,9 @@ export default function App() {
           setSessionState('active');
           setIsCalibrating(false);
         }
+        if (readingMode !== 'continuous') {
+          startTimerIfIdle();
+        }
         const curIdx =
           readingMode === 'continuous'
             ? layout.activeSentenceIndex
@@ -696,6 +766,9 @@ export default function App() {
         if (sessionState !== 'active') {
           setSessionState('active');
           setIsCalibrating(false);
+        }
+        if (readingMode !== 'continuous') {
+          startTimerIfIdle();
         }
         const curIdx =
           readingMode === 'continuous'
@@ -731,6 +804,7 @@ export default function App() {
     sessionState,
     layout.activeSentenceIndex,
     activeUnitIndex,
+    startTimerIfIdle,
     jumpToUnit,
     handleTogglePlayPause,
     handleContinueLongUnit,
@@ -761,6 +835,7 @@ export default function App() {
         const nextScript = parseScript(text, nextFormat, file.name);
 
         setPlaybackState('paused');
+        resetElapsedTimer();
         setRawText(text);
         setFormat(nextFormat);
         setFileName(file.name);
@@ -791,6 +866,7 @@ export default function App() {
       }
     },
     [
+      resetElapsedTimer,
       typography,
       viewportW,
       viewportH,
@@ -875,6 +951,39 @@ export default function App() {
     readingMode === 'continuous'
       ? layout.activeSentenceIndex
       : activeUnitIndex;
+
+  // Estimated remaining scroll time (continuous scroll mode only)
+  const estimation = useMemo(() => {
+    if (readingMode !== 'continuous') {
+      return { estimatedSeconds: null as number | null, remainingLines: 0 };
+    }
+    if (!layout.hasAnyReadableSpace || layout.lines.length === 0) {
+      return { estimatedSeconds: null as number | null, remainingLines: 0 };
+    }
+    const contentLines = layout.lines.filter((l) => !l.isDivider && l.spans.length > 0);
+    if (contentLines.length === 0 || layout.isAtEnd) {
+      return { estimatedSeconds: 0, remainingLines: 0 };
+    }
+    const lastLine = contentLines[contentLines.length - 1];
+    const endTargetY = readingMarker.y + 4;
+    const remainingPt = Math.max(0, lastLine.y - endTargetY);
+    const speed = Math.max(1, typography.speedPtPerSec);
+    const remainingLines = contentLines.reduce(
+      (acc, l) => (l.y > endTargetY ? acc + 1 : acc),
+      0
+    );
+    return {
+      estimatedSeconds: remainingPt / speed,
+      remainingLines,
+    };
+  }, [
+    readingMode,
+    layout.hasAnyReadableSpace,
+    layout.lines,
+    layout.isAtEnd,
+    readingMarker.y,
+    typography.speedPtPerSec,
+  ]);
 
   return (
     <div
@@ -1056,6 +1165,24 @@ export default function App() {
           />
         </FloatingWindowShell>
 
+        {/* Left Elapsed Timer & Right Estimated Remaining Time HUD Windows */}
+        <TimerHudPanels
+          language={language}
+          elapsedMs={elapsedMs}
+          timerStatus={timerStatus}
+          readingMode={readingMode}
+          estimatedSeconds={estimation.estimatedSeconds}
+          remainingLines={estimation.remainingLines}
+          speedPtPerSec={typography.speedPtPerSec}
+          isAtEnd={layout.isAtEnd}
+          hasReadableSpace={layout.hasAnyReadableSpace}
+          windowRect={windowRect}
+          canvasW={canvasSize.w}
+          canvasH={canvasSize.h}
+          isFullscreen={isFullscreen}
+          onResetTimer={resetElapsedTimer}
+        />
+
         {/* File Drag-and-Drop Overlay */}
         {isDraggingFile && (
           <div className="absolute inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center pointer-events-none">
@@ -1189,6 +1316,7 @@ export default function App() {
           const geom = createDefaultGeometry(canvasSize.w, canvasSize.h + HEADER_HEIGHT);
           setPlaybackState('paused');
           setSessionState('idle');
+          resetElapsedTimer();
           setRawText(language === 'en' ? DEFAULT_SAMPLE_SCRIPT_EN : DEFAULT_SAMPLE_SCRIPT);
           setFormat('md');
           setFileName(t.defaultFileName);

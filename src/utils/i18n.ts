@@ -144,6 +144,22 @@ export interface UIMessages {
   wakeErrorSimulated: string;
   wakeErrorUnsupported: string;
   wakeErrorDenied: (msg: string) => string;
+
+  // Timer & Estimated Remaining Time HUDs
+  elapsedTimerTitle: string;
+  timerStatusIdle: string;
+  timerStatusRunning: string;
+  timerStatusStopped: string;
+  timerPauseProofHint: string;
+  timerResetBtn: string;
+  timerResetTitle: string;
+  estimatedTimeTitle: string;
+  estimatedScrollOnly: string;
+  estimatedScrollOnlySub: string;
+  estimatedAtSpeed: (speed: number) => string;
+  estimatedRemainingLines: (lines: number) => string;
+  estimatedAtEnd: string;
+  estimatedUnreadable: string;
 }
 
 export const MESSAGES: Record<AppLanguage, UIMessages> = {
@@ -287,6 +303,21 @@ export const MESSAGES: Record<AppLanguage, UIMessages> = {
     wakeErrorSimulated: '模拟系统电源策略限制，请点击重试',
     wakeErrorUnsupported: '当前浏览器环境不支持 Screen Wake Lock API',
     wakeErrorDenied: (msg) => `请求被拒绝（${msg}）`,
+
+    elapsedTimerTitle: '录制计时',
+    timerStatusIdle: '待命 · 首行滚动起算',
+    timerStatusRunning: '计时中 · 暂停不停表',
+    timerStatusStopped: '已定格 · 本场用时',
+    timerPauseProofHint: '按空格暂停不停止计时',
+    timerResetBtn: '重置',
+    timerResetTitle: '重置计时器归零',
+    estimatedTimeTitle: '预估剩余',
+    estimatedScrollOnly: '仅连续滚动预估',
+    estimatedScrollOnlySub: '逐句 / 逐段模式不计时预估',
+    estimatedAtSpeed: (speed) => `按 ${speed} 点/秒`,
+    estimatedRemainingLines: (lines) => `剩 ${lines} 行`,
+    estimatedAtEnd: '已到达末尾',
+    estimatedUnreadable: '可用区不足',
   },
 
   en: {
@@ -433,5 +464,20 @@ export const MESSAGES: Record<AppLanguage, UIMessages> = {
     wakeErrorSimulated: 'Simulated system power policy restriction — click Retry',
     wakeErrorUnsupported: 'Screen Wake Lock API is not supported in this browser',
     wakeErrorDenied: (msg) => `Request denied (${msg})`,
+
+    elapsedTimerTitle: 'Recording Timer',
+    timerStatusIdle: 'Ready · Starts on scroll',
+    timerStatusRunning: 'Running · Keeps through pause',
+    timerStatusStopped: 'Stopped · Total duration',
+    timerPauseProofHint: 'Space pause does not stop timer',
+    timerResetBtn: 'Reset',
+    timerResetTitle: 'Reset elapsed timer to 00:00',
+    estimatedTimeTitle: 'Est. Remaining',
+    estimatedScrollOnly: 'Scroll mode only',
+    estimatedScrollOnlySub: 'Disabled in Sentence / Paragraph mode',
+    estimatedAtSpeed: (speed) => `At ${speed} pt/s`,
+    estimatedRemainingLines: (lines) => `${lines} lines left`,
+    estimatedAtEnd: 'At end of script',
+    estimatedUnreadable: 'No readable space',
   },
 };
