@@ -69,3 +69,13 @@ npm run build
 - **Frontend**: React 19, TypeScript, Tailwind CSS v4, Lucide Icons
 - **Layout Engine**: Custom Canvas 2D character-width measurement & real-time exclusion-union line slicer
 - **Browser APIs**: Screen Wake Lock API (`navigator.wakeLock`), File / UTF-8 `TextDecoder`, `localStorage` v1 schema persistence
+
+---
+
+## Project Origins & Licensing / 项目来源与许可
+
+The original PRD proposed building on [pedrambayat/teleprompter](https://github.com/pedrambayat/teleprompter), a native macOS project. This repository currently contains a React/Vite web implementation. Whether any upstream code or protected materials were reused has not yet been verified; this note does not assign the upstream license to this project's own code.
+
+原 PRD 计划基于上述原生 macOS 项目改造；当前仓库为 React/Vite Web 实现，尚未核实是否复用了上游代码或其他受保护材料。如存在适用的复用，应随相关源码及分发产物保留上游完整版权与 MIT 许可声明，README 署名不能替代该声明。
+
+See the [PRD licensing addendum / PRD 许可补充](docs/PRD-LICENSING-ADDENDUM.md) for scope and release checks, and the [verbatim upstream MIT notice / 上游原始 MIT 声明](docs/licenses/pedrambayat-teleprompter-MIT.txt). The addendum supplements, but does not edit, the original PRD PDF.
